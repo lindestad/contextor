@@ -5,4 +5,6 @@ edition = "2021"
 
 [dependencies]
 eframe = "0.30.0"
+ignore = "0.4.23"
+rayon = "1.10.0"
 rfd = "0.15.2"
