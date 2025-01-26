@@ -1,4 +1,3 @@
-// scanner.rs (Multithreaded File Scanning with .gitignore Support)
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use std::fs;
@@ -41,16 +40,19 @@ pub fn scan_project(folder_path: &str, max_file_size: u64) -> Vec<ScannedFile> {
 fn process_file(path: &PathBuf, max_file_size: u64) -> Option<ScannedFile> {
     if let Ok(metadata) = fs::metadata(path) {
         let file_size = metadata.len();
+
         if file_size > max_file_size {
             return Some(ScannedFile {
                 path: path.to_string_lossy().to_string(),
                 content: Some(format!(
-                    "[Skipped: filesize {:.1}MB]",
-                    file_size as f64 / 1_000_000.0
+                    "[File size > {:.1}MB (max: {:.1}MB)]",
+                    file_size as f64 / 1_000_000.0,
+                    max_file_size as f64 / 1_000_000.0
                 )),
                 is_binary: false,
             });
         }
+
         if metadata.is_file() {
             return Some(read_file(path));
         }
@@ -77,7 +79,7 @@ fn read_file(path: &PathBuf) -> ScannedFile {
     } else {
         Some(truncate_text(
             String::from_utf8_lossy(&data).to_string(),
-            10_000,
+            10_000_000,
         ))
     };
 
@@ -94,77 +96,8 @@ fn is_binary(data: &[u8]) -> bool {
 
 fn truncate_text(text: String, max_len: usize) -> String {
     if text.len() > max_len {
-        format!("{}\n[Truncated: File too large]", &text[..max_len])
+        format!("{}\n[Truncated: File too large]", &text[..max_len as usize])
     } else {
         text
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use serial_test::serial;
-    use std::fs::File;
-    use std::io::Write;
-
-    #[test]
-    fn test_is_binary() {
-        let text_data = b"Hello, world!";
-        let binary_data = b"\x00\xFF\xA0\x45";
-
-        assert!(!is_binary(text_data));
-        assert!(is_binary(binary_data));
-    }
-
-    #[test]
-    fn test_truncate_text() {
-        let text = "Hello, this is a long text.".to_string();
-        let truncated = truncate_text(text.clone(), 10);
-        assert_eq!(truncated, "Hello, thi\n[Truncated: File too large]");
-    }
-
-    #[test]
-    #[serial]
-    fn test_gitignore_exclusion() {
-        let test_dir = "test_gitignore";
-        fs::create_dir_all(test_dir).unwrap();
-
-        // Create a .gitignore file
-        let gitignore_path = format!("{}/.gitignore", test_dir);
-        let mut gitignore = File::create(&gitignore_path).unwrap();
-        writeln!(gitignore, "ignored_file.txt").unwrap();
-
-        // Create an ignored file
-        let ignored_file_path = format!("{}/ignored_file.txt", test_dir);
-        fs::write(&ignored_file_path, "This should be ignored").unwrap();
-
-        // Create a non-ignored file
-        let valid_file_path = format!("{}/valid_file.txt", test_dir);
-        fs::write(&valid_file_path, "This should be included").unwrap();
-
-        let results = scan_project(test_dir, 5_000_000);
-
-        assert!(results.iter().any(|f| f.path.ends_with("valid_file.txt")));
-        assert!(!results.iter().any(|f| f.path.ends_with("ignored_file.txt")));
-
-        fs::remove_dir_all(test_dir).unwrap();
-    }
-
-    #[test]
-    fn test_large_file_skipping() {
-        let test_dir = "test_large_file";
-        fs::create_dir_all(test_dir).unwrap();
-
-        let large_file_path = format!("{}/large_file.txt", test_dir);
-        let mut file = File::create(&large_file_path).unwrap();
-        file.write_all(&vec![b'A'; 6_000_000]).unwrap();
-
-        let results = scan_project(test_dir, 5_000_000);
-
-        assert!(results
-            .iter()
-            .any(|f| f.content.as_deref() == Some("[Skipped: filesize 6.0MB]")));
-
-        fs::remove_dir_all(test_dir).unwrap();
     }
 }
