@@ -5,6 +5,7 @@ use std::path::PathBuf;
 pub struct ContextorApp {
     selected_folder: Option<PathBuf>,
     output_preview: String,
+    max_file_size: String, // Store as string for UI input handling
 }
 
 impl Default for ContextorApp {
@@ -12,6 +13,7 @@ impl Default for ContextorApp {
         Self {
             selected_folder: None,
             output_preview: "Select a folder to generate a summary".to_string(),
+            max_file_size: "1000000".to_string(), // Default 1MB
         }
     }
 }
@@ -29,28 +31,12 @@ impl eframe::App for ContextorApp {
             }
 
             ui.separator();
+            ui.label("Max file size to scan (in bytes):");
+            ui.text_edit_singleline(&mut self.max_file_size);
+
+            ui.separator();
             ui.label("Project Summary:");
             ui.text_edit_multiline(&mut self.output_preview);
         });
     }
-}
-
-// src/scanner.rs (Stub for File Scanning Logic)
-pub fn scan_project(folder_path: &str) -> String {
-    format!("Scanning folder: {}", folder_path)
-}
-
-// src/formatter.rs (Stub for Formatting Logic)
-pub fn format_output(raw_data: &str) -> String {
-    format!("Formatted Output: {}", raw_data)
-}
-
-// src/clipboard.rs (Stub for Clipboard Logic)
-pub fn copy_to_clipboard(content: &str) {
-    println!("Copying to clipboard: {}", content);
-}
-
-// src/utils.rs (Utility Functions)
-pub fn helper_function() {
-    println!("Helper function placeholder");
 }

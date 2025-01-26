@@ -33,7 +33,7 @@ fn test_scan_project() {
     let test_file = test_dir.path.join("test.txt");
     fs::write(&test_file, "Hello, world!").unwrap();
 
-    let results = scan_project(test_dir.path.to_str().unwrap());
+    let results = scan_project(test_dir.path.to_str().unwrap(), 5_000_000);
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].path, test_file.to_string_lossy());
@@ -49,7 +49,7 @@ fn test_binary_detection() {
     let mut file = fs::File::create(&binary_file).unwrap();
     file.write_all(&[0, 159, 146, 150]).unwrap(); // Some binary bytes
 
-    let results = scan_project(test_dir.path.to_str().unwrap());
+    let results = scan_project(test_dir.path.to_str().unwrap(), 5_000_000);
 
     assert_eq!(results.len(), 1);
     assert_eq!(results[0].path, binary_file.to_string_lossy());

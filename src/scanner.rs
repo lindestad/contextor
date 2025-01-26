@@ -10,7 +10,7 @@ pub struct ScannedFile {
     pub is_binary: bool,
 }
 
-pub fn scan_project(folder_path: &str) -> Vec<ScannedFile> {
+pub fn scan_project(folder_path: &str, max_file_size: u64) -> Vec<ScannedFile> {
     let walker = WalkBuilder::new(folder_path)
         .git_ignore(true) // Enables .gitignore filtering
         .hidden(false) // Exclude hidden files
@@ -34,12 +34,23 @@ pub fn scan_project(folder_path: &str) -> Vec<ScannedFile> {
     // Process files in parallel using rayon
     files
         .par_iter()
-        .filter_map(|path| process_file(path))
+        .filter_map(|path| process_file(path, max_file_size))
         .collect()
 }
 
-fn process_file(path: &PathBuf) -> Option<ScannedFile> {
+fn process_file(path: &PathBuf, max_file_size: u64) -> Option<ScannedFile> {
     if let Ok(metadata) = fs::metadata(path) {
+        let file_size = metadata.len();
+        if file_size > max_file_size {
+            return Some(ScannedFile {
+                path: path.to_string_lossy().to_string(),
+                content: Some(format!(
+                    "[Skipped: filesize {:.1}MB]",
+                    file_size as f64 / 1_000_000.0
+                )),
+                is_binary: false,
+            });
+        }
         if metadata.is_file() {
             return Some(read_file(path));
         }
@@ -131,10 +142,28 @@ mod tests {
         let valid_file_path = format!("{}/valid_file.txt", test_dir);
         fs::write(&valid_file_path, "This should be included").unwrap();
 
-        let results = scan_project(test_dir);
+        let results = scan_project(test_dir, 5_000_000);
 
         assert!(results.iter().any(|f| f.path.ends_with("valid_file.txt")));
         assert!(!results.iter().any(|f| f.path.ends_with("ignored_file.txt")));
+
+        fs::remove_dir_all(test_dir).unwrap();
+    }
+
+    #[test]
+    fn test_large_file_skipping() {
+        let test_dir = "test_large_file";
+        fs::create_dir_all(test_dir).unwrap();
+
+        let large_file_path = format!("{}/large_file.txt", test_dir);
+        let mut file = File::create(&large_file_path).unwrap();
+        file.write_all(&vec![b'A'; 6_000_000]).unwrap();
+
+        let results = scan_project(test_dir, 5_000_000);
+
+        assert!(results
+            .iter()
+            .any(|f| f.content.as_deref() == Some("[Skipped: filesize 6.0MB]")));
 
         fs::remove_dir_all(test_dir).unwrap();
     }
