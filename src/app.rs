@@ -1,6 +1,7 @@
+use crate::clipboard::copy_to_clipboard;
 use crate::formatter::{build_tree, format_file_contents, format_project_summary};
 use crate::scanner::scan_project;
-use arboard::Clipboard;
+use crate::utils::load_custom_font;
 use eframe::egui;
 use rfd::FileDialog;
 use std::path::PathBuf;
@@ -138,33 +139,4 @@ impl ContextorApp {
             self.error_message = Some("No folder selected.".to_string());
         }
     }
-}
-
-/// Loads a custom monospaced font that supports box-drawing characters
-fn load_custom_font(ctx: &egui::Context) {
-    use egui::{FontData, FontDefinitions, FontFamily};
-    use std::sync::Arc;
-
-    let mut fonts = FontDefinitions::default();
-
-    // Load JetBrains Mono from the assets directory
-    fonts.font_data.insert(
-        "JetBrainsMono".to_owned(),
-        Arc::new(FontData::from_static(include_bytes!(
-            "../assets/fonts/JetBrainsMono-Regular.ttf"
-        ))),
-    );
-
-    // Use JetBrains Mono for Monospace text
-    fonts
-        .families
-        .insert(FontFamily::Monospace, vec!["JetBrainsMono".to_owned()]);
-
-    ctx.set_fonts(fonts);
-}
-
-/// Copies text to clipboard
-fn copy_to_clipboard(text: &str) {
-    let mut clipboard = Clipboard::new().unwrap();
-    clipboard.set_text(text).unwrap();
 }
