@@ -1,3 +1,4 @@
+// scanner.rs (Multithreaded File Scanning with .gitignore Support)
 use ignore::WalkBuilder;
 use rayon::prelude::*;
 use std::fs;
@@ -10,11 +11,24 @@ pub struct ScannedFile {
 }
 
 pub fn scan_project(folder_path: &str) -> Vec<ScannedFile> {
-    let walker = WalkBuilder::new(folder_path).git_ignore(true).build();
+    let walker = WalkBuilder::new(folder_path)
+        .git_ignore(true) // Enables .gitignore filtering
+        .hidden(false) // Exclude hidden files
+        .parents(true) // Respect .gitignore in parent directories
+        .build();
 
     // Collect paths before processing to avoid race conditions
     let files: Vec<PathBuf> = walker
-        .filter_map(|entry| entry.ok().map(|e| e.path().to_path_buf()))
+        .filter_map(|entry| {
+            if let Ok(e) = entry {
+                if !e.file_type()?.is_file() {
+                    return None; // Skip directories
+                }
+                Some(e.path().to_path_buf())
+            } else {
+                None
+            }
+        })
         .collect();
 
     // Process files in parallel using rayon
@@ -41,7 +55,7 @@ fn read_file(path: &PathBuf) -> ScannedFile {
                 path: path.to_string_lossy().to_string(),
                 content: None,
                 is_binary: true,
-            }
+            };
         }
     };
 
@@ -78,6 +92,9 @@ fn truncate_text(text: String, max_len: usize) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use serial_test::serial;
+    use std::fs::File;
+    use std::io::Write;
 
     #[test]
     fn test_is_binary() {
@@ -93,5 +110,32 @@ mod tests {
         let text = "Hello, this is a long text.".to_string();
         let truncated = truncate_text(text.clone(), 10);
         assert_eq!(truncated, "Hello, thi\n[Truncated: File too large]");
+    }
+
+    #[test]
+    #[serial]
+    fn test_gitignore_exclusion() {
+        let test_dir = "test_gitignore";
+        fs::create_dir_all(test_dir).unwrap();
+
+        // Create a .gitignore file
+        let gitignore_path = format!("{}/.gitignore", test_dir);
+        let mut gitignore = File::create(&gitignore_path).unwrap();
+        writeln!(gitignore, "ignored_file.txt").unwrap();
+
+        // Create an ignored file
+        let ignored_file_path = format!("{}/ignored_file.txt", test_dir);
+        fs::write(&ignored_file_path, "This should be ignored").unwrap();
+
+        // Create a non-ignored file
+        let valid_file_path = format!("{}/valid_file.txt", test_dir);
+        fs::write(&valid_file_path, "This should be included").unwrap();
+
+        let results = scan_project(test_dir);
+
+        assert!(results.iter().any(|f| f.path.ends_with("valid_file.txt")));
+        assert!(!results.iter().any(|f| f.path.ends_with("ignored_file.txt")));
+
+        fs::remove_dir_all(test_dir).unwrap();
     }
 }
