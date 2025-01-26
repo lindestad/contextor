@@ -1,3 +1,4 @@
+use crate::formatter::{build_tree, format_file_contents, format_project_summary};
 use crate::scanner::scan_project;
 use eframe::egui;
 use rfd::FileDialog;
@@ -72,27 +73,18 @@ impl ContextorApp {
             let (tx, rx) = mpsc::channel();
 
             thread::spawn(move || {
-                let result = scan_project(&folder_path.to_string_lossy(), max_file_size);
-                tx.send(result).unwrap();
+                let scan_result = scan_project(&folder_path.to_string_lossy(), max_file_size);
+                tx.send(scan_result).unwrap();
             });
 
             match rx.recv() {
                 Ok(files) => {
-                    self.output_preview = files
-                        .iter()
-                        .map(|file| {
-                            format!(
-                                "{} ({})",
-                                file.path,
-                                if file.is_binary {
-                                    "binary file"
-                                } else {
-                                    file.content.as_deref().unwrap_or("empty file")
-                                }
-                            )
-                        })
-                        .collect::<Vec<_>>()
-                        .join("\n");
+                    // Generate structured output
+                    let tree = build_tree(&files);
+                    let file_contents = format_file_contents(&files);
+                    let formatted_summary = format_project_summary(tree, file_contents);
+
+                    self.output_preview = formatted_summary;
                 }
                 Err(_) => self.error_message = Some("Scan failed.".to_string()),
             }

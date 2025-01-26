@@ -36,7 +36,12 @@ fn test_scan_project() {
     let results = scan_project(test_dir.path.to_str().unwrap(), 5_000_000);
 
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].path, test_file.to_string_lossy());
+
+    // Compute the expected relative path correctly
+    let expected_relative_path = test_file.strip_prefix(&test_dir.path).unwrap();
+
+    assert_eq!(results[0].path, expected_relative_path.to_string_lossy());
+
     assert_eq!(results[0].content, Some("Hello, world!".to_string()));
     assert!(!results[0].is_binary);
 }
@@ -52,7 +57,11 @@ fn test_binary_detection() {
     let results = scan_project(test_dir.path.to_str().unwrap(), 5_000_000);
 
     assert_eq!(results.len(), 1);
-    assert_eq!(results[0].path, binary_file.to_string_lossy());
+
+    // Compute the expected relative path correctly
+    let expected_relative_path = binary_file.strip_prefix(&test_dir.path).unwrap();
+
+    assert_eq!(results[0].path, expected_relative_path.to_string_lossy());
     assert!(results[0].is_binary);
     assert_eq!(results[0].content, None);
 }
